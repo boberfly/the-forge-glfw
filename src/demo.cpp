@@ -488,7 +488,8 @@ bool Demo::createSwapchainResources()
 			return false;
 	}
 
-	if (!mAppUI.Load((RenderTarget**)RHI_swapChainGetRenderTarget(mSwapChain, 1)))
+	RenderTarget* rt = (RenderTarget*)RHI_swapChainGetRenderTarget(mSwapChain, 1);
+	if (!mAppUI.Load(&rt, 1))
 		return false;
 
 	return true;
