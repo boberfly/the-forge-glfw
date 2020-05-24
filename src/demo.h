@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <Renderer/IRenderer.h>
+#include "rhi/rhi.h"
 #include <OS/Interfaces/ITime.h>
 #include <Middleware_3/UI/AppUI.h>
 #include <glm/glm.hpp>
@@ -50,25 +50,25 @@ private:
 
 	bool createSwapchainResources();
 
-	Renderer* mRenderer = NULL;
-	Queue* mGraphicsQueue = NULL;
-	CmdPool* mCmdPool = NULL;
-	Cmd** mCmds = { NULL };
-	SwapChain* mSwapChain = NULL;
-	RenderTarget* mDepthBuffer = NULL;
-	LoadActionsDesc mLoadActions = {};
-	Fence* mRenderCompleteFences[gImageCount] = { NULL };
-	Semaphore* mImageAcquiredSemaphore = NULL;
-	Semaphore* mRenderCompleteSemaphores[gImageCount] = { NULL };
+	RHI_RendererHandle mRenderer = NULL;
+	RHI_QueueHandle mGraphicsQueue = NULL;
+	RHI_CmdPoolHandle mCmdPool = NULL;
+	RHI_CmdHandle* mCmds = { NULL };
+	RHI_SwapChainHandle mSwapChain = NULL;
+	RHI_RenderTargetHandle mDepthBuffer = NULL;
+	RHI_LoadActionsDesc mLoadActions = {};
+	RHI_FenceHandle mRenderCompleteFences[gImageCount] = { NULL };
+	RHI_SemaphoreHandle mImageAcquiredSemaphore = NULL;
+	RHI_SemaphoreHandle mRenderCompleteSemaphores[gImageCount] = { NULL };
 
-	Texture* mTexture = NULL;
-	Shader* mShader = NULL;
-	RootSignature* mRootSignature = NULL;
-	DescriptorSet* mDescriptorSet = NULL;
-	Pipeline* mGraphicsPipeline = NULL;
-	Buffer* mVertexBuffer = NULL;
-	Buffer* mIndexBuffer = NULL;
-	Sampler* mSampler = NULL;
+	RHI_TextureHandle mTexture = NULL;
+	RHI_ShaderHandle mShader = NULL;
+	RHI_RootSignatureHandle mRootSignature = NULL;
+	RHI_DescriptorSetHandle mDescriptorSet = NULL;
+	RHI_PipelineHandle mGraphicsPipeline = NULL;
+	RHI_BufferHandle mVertexBuffer = NULL;
+	RHI_BufferHandle mIndexBuffer = NULL;
+	RHI_SamplerHandle mSampler = NULL;
 
 	Timer mTimer;
 

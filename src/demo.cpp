@@ -18,8 +18,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h> 
-#include <Renderer/IShaderReflection.h>
-#include <Renderer/IResourceLoader.h>
 #include <OS/Interfaces/ILog.h>
 #include <OS/Interfaces/IInput.h>
 
@@ -32,36 +30,36 @@ Demo::~Demo()
 	
 	if (mRenderer != NULL)
 	{
-		waitQueueIdle(mGraphicsQueue);
-		mAppUI.Unload();
-		mAppUI.Exit();
+		RHI_waitQueueIdle(mGraphicsQueue);
+		//mAppUI.Unload();
+		//mAppUI.Exit();
 
 		//resources
-		removeResource(mTexture);
-		removeResource(mVertexBuffer);
-		removeResource(mIndexBuffer);
+		RHI_removeTextureResource(mTexture);
+		RHI_removeBufferResource(mVertexBuffer);
+		RHI_removeBufferResource(mIndexBuffer);
 		//forge objects
-		removeShader(mRenderer, mShader);
-		removeRootSignature(mRenderer, mRootSignature);
-		removeDescriptorSet(mRenderer, mDescriptorSet);
-		removePipeline(mRenderer, mGraphicsPipeline);
-		removeSampler(mRenderer, mSampler);
-		removeSwapChain(mRenderer, mSwapChain);
-		removeRenderTarget(mRenderer, mDepthBuffer);
+		RHI_removeShader(mRenderer, mShader);
+		RHI_removeRootSignature(mRenderer, mRootSignature);
+		RHI_removeDescriptorSet(mRenderer, mDescriptorSet);
+		RHI_removePipeline(mRenderer, mGraphicsPipeline);
+		RHI_removeSampler(mRenderer, mSampler);
+		RHI_removeSwapChain(mRenderer, mSwapChain);
+		RHI_removeRenderTarget(mRenderer, mDepthBuffer);
 
 		for (uint32_t i = 0; i < gImageCount; ++i)
 		{
-			removeFence(mRenderer, mRenderCompleteFences[i]);
-			removeSemaphore(mRenderer, mRenderCompleteSemaphores[i]);
+			RHI_removeFence(mRenderer, mRenderCompleteFences[i]);
+			RHI_removeSemaphore(mRenderer, mRenderCompleteSemaphores[i]);
 		}
 
-		removeSemaphore(mRenderer, mImageAcquiredSemaphore);
-		removeCmd_n(mRenderer, gImageCount, mCmds);
-		removeCmdPool(mRenderer, mCmdPool);
-		removeQueue(mRenderer, mGraphicsQueue);
+		RHI_removeSemaphore(mRenderer, mImageAcquiredSemaphore);
+		RHI_removeCmd_n(mRenderer, gImageCount, mCmds);
+		RHI_removeCmdPool(mRenderer, mCmdPool);
+		RHI_removeQueue(mRenderer, mGraphicsQueue);
 
-		exitResourceLoaderInterface(mRenderer);
-		removeRenderer(mRenderer);
+		RHI_exitResourceLoaderInterface(mRenderer);
+		RHI_removeRenderer(mRenderer);
 	}
 
 	Log::Exit();
@@ -104,11 +102,11 @@ bool Demo::init(GLFWwindow *pWindow)
 	}
 
 	//work out which api we are using
-	RendererApi api;
+	RHI_RendererApi api;
 #if defined(VULKAN)
-	api = RENDERER_API_VULKAN;
+	api = RHI_RENDERER_API_VULKAN;
 #elif defined(DIRECT3D12)
-	api = RENDERER_API_D3D12;
+	api = RHI_RENDERER_API_D3D12;
 #else
 	#error Trying to use a renderer API not supported by this demo
 #endif
@@ -116,11 +114,11 @@ bool Demo::init(GLFWwindow *pWindow)
 	//set directories for the selected api
 	switch (api)
 	{
-	case RENDERER_API_D3D12:
+	case RHI_RENDERER_API_D3D12:
       fsSetRelativePathForResourceDirEnum(RD_SHADER_SOURCES, "shaders/d3d12/");
       fsSetRelativePathForResourceDirEnum(RD_SHADER_BINARIES, "shaders/d3d12/binary/");
 		break;
-	case RENDERER_API_VULKAN:
+	case RHI_RENDERER_API_VULKAN:
       fsSetRelativePathForResourceDirEnum(RD_SHADER_SOURCES, "shaders/vulkan/");
       fsSetRelativePathForResourceDirEnum(RD_SHADER_BINARIES, "shaders/vulkan/binary/");
 		break;
@@ -144,57 +142,57 @@ bool Demo::init(GLFWwindow *pWindow)
 	glfwGetFramebufferSize(pWindow, &mFbWidth, &mFbHeight);
 
 	//init renderer interface
-	RendererDesc rendererDesc = {};
-	rendererDesc.mApi = api;
-	rendererDesc.mGpuMode = GPU_MODE_SINGLE;
-	rendererDesc.mShaderTarget = shader_target_5_1; //5_1 will do for this demo
+	RHI_RendererDesc rendererDesc = {};
+	//rendererDesc.api = api;
+	rendererDesc.gpuMode = RHI_GPU_MODE_SINGLE;
+	rendererDesc.shaderTarget = RHI_SHADER_TARGET_5_1; //5_1 will do for this demo
 
-	initRenderer("The-Forge Demo", &rendererDesc, &mRenderer);
+	mRenderer = RHI_initRenderer("The-Forge Demo", &rendererDesc);
 	if (mRenderer == NULL)
 		return false;
 
 	//init resource loader interface
-	initResourceLoaderInterface(mRenderer);
+	RHI_initResourceLoaderInterface(mRenderer, nullptr);
 
 	//create graphics queue
-	QueueDesc queueDesc = {};
-	queueDesc.mType = QUEUE_TYPE_GRAPHICS;
-	queueDesc.mFlag = QUEUE_FLAG_NONE;//use QUEUE_FLAG_INIT_MICROPROFILE to enable profiling;
-	addQueue(mRenderer, &queueDesc, &mGraphicsQueue);
+	RHI_QueueDesc queueDesc = {};
+	queueDesc.type = RHI_QUEUE_TYPE_GRAPHICS;
+	queueDesc.flags = RHI_QUEUE_FLAG_NONE;//use RHI_QUEUE_FLAG_INIT_MICROPROFILE to enable profiling;
+	RHI_addQueue(mRenderer, &queueDesc, &mGraphicsQueue);
 
 	//create command pool for the graphics queue
-	CmdPoolDesc cmdPoolDesc = {};
-	cmdPoolDesc.pQueue = mGraphicsQueue;
-	addCmdPool(mRenderer, &cmdPoolDesc, &mCmdPool);
+	RHI_CmdPoolDesc cmdPoolDesc = {};
+	cmdPoolDesc.queue = mGraphicsQueue;
+	RHI_addCmdPool(mRenderer, &cmdPoolDesc, &mCmdPool);
 
 	//create command buffer for each potential swapchain image
-	CmdDesc cmdDesc = {};
-	cmdDesc.pPool = mCmdPool;
-	addCmd_n(mRenderer, &cmdDesc, gImageCount, &mCmds);
+	RHI_CmdDesc cmdDesc = {};
+	cmdDesc.pool = mCmdPool;
+	RHI_addCmd_n(mRenderer, &cmdDesc, gImageCount, &mCmds);
 
 	//create sync objects
 	for (uint32_t i = 0; i < gImageCount; ++i)
 	{
-		addFence(mRenderer, &mRenderCompleteFences[i]);
-		addSemaphore(mRenderer, &mRenderCompleteSemaphores[i]);
+		RHI_addFence(mRenderer, &mRenderCompleteFences[i]);
+		RHI_addSemaphore(mRenderer, &mRenderCompleteSemaphores[i]);
 	}
-	addSemaphore(mRenderer, &mImageAcquiredSemaphore);
+	RHI_addSemaphore(mRenderer, &mImageAcquiredSemaphore);
 
 	//UI - create before swapchain as createSwapchainResources calls into mAppUI
-	if (!mAppUI.Init(mRenderer))
-		return false;
+	//if (!mAppUI.Init((Renderer *)mRenderer))
+	//	return false;
 
-	mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf", RD_BUILTIN_FONTS);
+	//mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf", RD_BUILTIN_FONTS);
 
 	//Load action for the render and depth target
-	mLoadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
-	mLoadActions.mClearColorValues[0].r = 0.2f;
-	mLoadActions.mClearColorValues[0].g = 0.2f;
-	mLoadActions.mClearColorValues[0].b = 0.2f;
-	mLoadActions.mClearColorValues[0].a = 0.0f;
-	mLoadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
-	mLoadActions.mClearDepth.depth = 1.0f;
-	mLoadActions.mClearDepth.stencil = 0;
+	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.clearColorValues[0].r = 0.2f;
+	mLoadActions.clearColorValues[0].g = 0.2f;
+	mLoadActions.clearColorValues[0].b = 0.2f;
+	mLoadActions.clearColorValues[0].a = 0.0f;
+	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.clearDepth.depth = 1.0f;
+	mLoadActions.clearDepth.stencil = 0;
 
 	//create swapchain and depth buffer
 	if (!createSwapchainResources())
@@ -236,14 +234,14 @@ bool Demo::init(GLFWwindow *pWindow)
 			Vertex(1.0f, -1.0f,  1.0f, 1.0f, 1.0f),
 		};
 
-		BufferLoadDesc desc = {};
-		desc.ppBuffer = &mVertexBuffer;
+		RHI_BufferLoadDesc desc = {};
+		desc.pBuffer = &mVertexBuffer;
 		desc.pData = vertices.data();
-		desc.mDesc.mDescriptors = DESCRIPTOR_TYPE_VERTEX_BUFFER;
+		desc.mDesc.mDescriptors = RHI_DESCRIPTOR_TYPE_VERTEX_BUFFER;
 		desc.mDesc.mSize = vertices.size() * sizeof(Vertex);
-		desc.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_GPU_ONLY;
+		desc.mDesc.mMemoryUsage = RHI_RESOURCE_MEMORY_USAGE_GPU_ONLY;
 
-		addResource(&desc, NULL, LOAD_PRIORITY_NORMAL);
+		RHI_addBufferResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
 	}
 
 	//index buffer
@@ -266,120 +264,125 @@ bool Demo::init(GLFWwindow *pWindow)
 
 		mIndexCount = (uint16_t)indices.size();
 
-		BufferLoadDesc desc = {};
-		desc.ppBuffer = &mIndexBuffer;
+		RHI_BufferLoadDesc desc = {};
+		desc.pBuffer = &mIndexBuffer;
 		desc.pData = indices.data();
-		desc.mDesc.mDescriptors = DESCRIPTOR_TYPE_INDEX_BUFFER;
+		desc.mDesc.mDescriptors = RHI_DESCRIPTOR_TYPE_INDEX_BUFFER;
 		desc.mDesc.mSize = mIndexCount * sizeof(uint16_t);
-		desc.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_GPU_ONLY;
+		desc.mDesc.mMemoryUsage = RHI_RESOURCE_MEMORY_USAGE_GPU_ONLY;
 
-		addResource(&desc, NULL, LOAD_PRIORITY_NORMAL);
+		RHI_addBufferResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
 	}
 
 	//texture
 	{
 		PathHandle path = fsGetPathInResourceDirEnum(RD_TEXTURES, "the-forge.dds");
-		TextureLoadDesc desc = {};
-		desc.ppTexture = &mTexture;
+		RHI_TextureLoadDesc desc = {};
+		desc.pTexture = &mTexture;
 		desc.pFilePath = path;
 
-		addResource(&desc, NULL, LOAD_PRIORITY_NORMAL);
+		RHI_addTextureResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
 	}
 
 	//sampler 
 	{
 		//trilinear
-		SamplerDesc desc = { FILTER_LINEAR, FILTER_LINEAR, MIPMAP_MODE_LINEAR,
-							 ADDRESS_MODE_CLAMP_TO_EDGE, ADDRESS_MODE_CLAMP_TO_EDGE, ADDRESS_MODE_CLAMP_TO_EDGE };
+		RHI_SamplerDesc desc = { RHI_FILTER_LINEAR, RHI_FILTER_LINEAR, RHI_MIPMAP_MODE_LINEAR,
+							 RHI_ADDRESS_MODE_CLAMP_TO_EDGE, RHI_ADDRESS_MODE_CLAMP_TO_EDGE, RHI_ADDRESS_MODE_CLAMP_TO_EDGE };
 
-		addSampler(mRenderer, &desc, &mSampler);
+		RHI_addSampler(mRenderer, &desc, &mSampler);
 	}
 
 	//shader
 	{
-		ShaderLoadDesc desc = {};
-		desc.mStages[0] = { "demo.vert", NULL, 0, RD_SHADER_SOURCES };
-		desc.mStages[1] = { "demo.frag", NULL, 0, RD_SHADER_SOURCES };
-		desc.mTarget = (ShaderTarget)mRenderer->mShaderTarget;
+		RHI_ShaderLoadDesc desc = {};
+		desc.mStages[0] = { "demo.vert", NULL, 0, RHI_RD_SHADER_SOURCES };
+		desc.mStages[1] = { "demo.frag", NULL, 0, RHI_RD_SHADER_SOURCES };
+		desc.mTarget = RHI_SHADER_TARGET_5_1;
 
-		addShader(mRenderer, &desc, &mShader);
+		RHI_addShaderResource(mRenderer, &desc, &mShader);
 	}
 
 	//root signature
 	{
 		const char* pStaticSamplers[] = { "samplerState0" };
-		RootSignatureDesc desc = {};
-		desc.mStaticSamplerCount = 1;
+		RHI_RootSignatureDesc desc = {};
+		desc.staticSamplerCount = 1;
 		desc.ppStaticSamplerNames = pStaticSamplers;
-		desc.ppStaticSamplers = &mSampler;
-		desc.mShaderCount = 1;
-		desc.ppShaders = &mShader;
+		desc.pStaticSamplers = &mSampler;
+		desc.shaderCount = 1;
+		desc.pShaders = &mShader;
 
-		addRootSignature(mRenderer, &desc, &mRootSignature);
+		RHI_addRootSignature(mRenderer, &desc, &mRootSignature);
 	}
 
 	//wait for our resource loads to complete, we need the texture for the descriptor set
-	waitForAllResourceLoads();
+	RHI_waitForAllResourceLoads();
 
 	//descriptor set
 	{
 		//create the descriptorset
-		DescriptorSetDesc desc = { mRootSignature, DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
-		addDescriptorSet(mRenderer, &desc, &mDescriptorSet);
+		RHI_DescriptorSetDesc desc = { mRootSignature, RHI_DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
+		RHI_addDescriptorSet(mRenderer, &desc, &mDescriptorSet);
 
 		//now update the data
-		DescriptorData params[1] = {};
+		RHI_DescriptorData params[1] = {};
 		params[0].pName = "texture0";
-		params[0].ppTextures = &mTexture;
-		updateDescriptorSet(mRenderer, 0, mDescriptorSet, 1, params);
+		params[0].pTextures = &mTexture;
+		RHI_updateDescriptorSet(mRenderer, 0, mDescriptorSet, 1, params);
 	}
 
 	//pipeline state object
 	{
 		//vertex layout
-		VertexLayout vertexLayout = {};
-		vertexLayout.mAttribCount = 2;
-		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
-		vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32_SFLOAT;
-		vertexLayout.mAttribs[0].mBinding = 0;
-		vertexLayout.mAttribs[0].mLocation = 0;
-		vertexLayout.mAttribs[0].mOffset = 0;
-		vertexLayout.mAttribs[1].mSemantic = SEMANTIC_TEXCOORD0;
-		vertexLayout.mAttribs[1].mFormat = TinyImageFormat_R32G32_SFLOAT;
-		vertexLayout.mAttribs[1].mBinding = 0;
-		vertexLayout.mAttribs[1].mLocation = 1;
-		vertexLayout.mAttribs[1].mOffset = 12;
+		RHI_VertexLayout vertexLayout = {};
+		vertexLayout.attribCount = 2;
+		vertexLayout.attribs[0].semantic = RHI_SEMANTIC_POSITION;
+		vertexLayout.attribs[0].format = RHI_IMAGE_FORMAT_R32G32B32_SFLOAT;
+		vertexLayout.attribs[0].binding = 0;
+		vertexLayout.attribs[0].location = 0;
+		vertexLayout.attribs[0].offset = 0;
+		vertexLayout.attribs[1].semantic = RHI_SEMANTIC_TEXCOORD0;
+		vertexLayout.attribs[1].format = RHI_IMAGE_FORMAT_R32G32_SFLOAT;
+		vertexLayout.attribs[1].binding = 0;
+		vertexLayout.attribs[1].location = 1;
+		vertexLayout.attribs[1].offset = 12;
 
 		//rasterizer
-		RasterizerStateDesc rasterizerStateDesc = {};
-		rasterizerStateDesc.mCullMode = CULL_MODE_BACK;
+		RHI_RasterizerStateDesc rasterizerStateDesc = {};
+		rasterizerStateDesc.cullMode = RHI_CULL_MODE_BACK;
 
 		//depth state
-		DepthStateDesc depthStateDesc = {};
-		depthStateDesc.mDepthTest = true;
-		depthStateDesc.mDepthWrite = true;
-		depthStateDesc.mDepthFunc = CMP_LEQUAL;
+		RHI_DepthStateDesc depthStateDesc = {};
+		depthStateDesc.depthTest = true;
+		depthStateDesc.depthWrite = true;
+		depthStateDesc.depthFunc = RHI_CMP_LEQUAL;
 
 		//pipeline
-		PipelineDesc desc = {};
-		desc.mType = PIPELINE_TYPE_GRAPHICS;
-		GraphicsPipelineDesc& pipelineSettings = desc.mGraphicsDesc;
-		pipelineSettings.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
-		pipelineSettings.mRenderTargetCount = 1;
+		RHI_PipelineDesc desc = {};
+		desc.type = RHI_PIPELINE_TYPE_GRAPHICS;
+		RHI_GraphicsPipelineDesc& pipelineSettings = desc.graphicsDesc;
+		pipelineSettings.primitiveTopo = RHI_PRIMITIVE_TOPO_TRI_LIST;
+		pipelineSettings.renderTargetCount = 1;
 		pipelineSettings.pDepthState = &depthStateDesc;
-		pipelineSettings.pColorFormats = &mSwapChain->ppRenderTargets[0]->mFormat;
-		pipelineSettings.mSampleCount = mSwapChain->ppRenderTargets[0]->mSampleCount;
-		pipelineSettings.mSampleQuality = mSwapChain->ppRenderTargets[0]->mSampleQuality;
-		pipelineSettings.mDepthStencilFormat = mDepthBuffer->mFormat;
-		pipelineSettings.pRootSignature = mRootSignature;
-		pipelineSettings.pShaderProgram = mShader;
+		RHI_RenderTargetDesc rtDesc = {};
+		RHI_renderTargetGetDesc(RHI_swapChainGetRenderTarget(mSwapChain, 0), rtDesc);
+		RHI_RenderTargetDesc depthRtDesc = {};
+		RHI_renderTargetGetDesc(mDepthBuffer, depthRtDesc);
+		pipelineSettings.pColorFormats = &rtDesc.format;
+		pipelineSettings.sampleCount = rtDesc.sampleCount;
+		pipelineSettings.sampleQuality = rtDesc.sampleQuality;
+		pipelineSettings.depthStencilFormat = depthRtDesc.format;
+		pipelineSettings.rootSignature = mRootSignature;
+		pipelineSettings.shaderProgram = mShader;
 		pipelineSettings.pVertexLayout = &vertexLayout;
 		pipelineSettings.pRasterizerState = &rasterizerStateDesc;
 
-		addPipeline(mRenderer, &desc, &mGraphicsPipeline);
+		RHI_addPipeline(mRenderer, &desc, &mGraphicsPipeline);
 	}
 
 	//add a gui component
+	/*
 	{
 		GuiDesc desc = {};
 		const float dpiScale = getDpiScale().x;
@@ -390,6 +393,7 @@ bool Demo::init(GLFWwindow *pWindow)
 		mGuiWindow->AddWidget(CheckboxWidget("V-Sync", &mVSyncEnabled));
 		mGuiWindow->AddWidget(SliderFloatWidget("Rotation Speed", &mRotationSpeed, 0.0f, 1.0f, 0.1f));
 	}
+	*/
 
 
 	//matrices
@@ -411,12 +415,12 @@ void Demo::onSize(const int32_t width, const int32_t height)
 	mFbHeight = height;
 
 	//wait for the graphics queue to be idle
-	waitQueueIdle(mGraphicsQueue);
+	RHI_waitQueueIdle(mGraphicsQueue);
 
 	//remove old swapchain and depth buffer
-	removeSwapChain(mRenderer, mSwapChain);
-	removeRenderTarget(mRenderer, mDepthBuffer);
-	mAppUI.Unload();
+	RHI_removeSwapChain(mRenderer, mSwapChain);
+	RHI_removeRenderTarget(mRenderer, mDepthBuffer);
+	//mAppUI.Unload();
 
 	//create new swapchain and depth buffer
 	createSwapchainResources();
@@ -437,12 +441,12 @@ void Demo::onMouseButton(int32_t button, int32_t action)
 		buttonPressed = true;
 
 	//the-forge has input bindings that are designed for game controllers, it seems to map left mouse button to BUTTON_SOUTH
-	mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
+	//mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
 }
 
 bool Demo::createSwapchainResources()
 {
-	WindowHandle handle;
+	RHI_WindowHandle handle;
 #ifdef _WIN32
 	handle.window = glfwGetWin32Window(mWindow);
 #else
@@ -452,17 +456,17 @@ bool Demo::createSwapchainResources()
 
 	//create swapchain
 	{
-		SwapChainDesc desc = {};
-		desc.mWindowHandle = handle;
-		desc.mPresentQueueCount = 1;
-		desc.ppPresentQueues = &mGraphicsQueue;
-		desc.mWidth = mFbWidth;
-		desc.mHeight = mFbHeight;
-		desc.mImageCount = gImageCount;
-		desc.mColorFormat = getRecommendedSwapchainFormat(true);
-		desc.mEnableVsync = true;
-		desc.mColorClearValue = mLoadActions.mClearColorValues[0];
-		addSwapChain(mRenderer, &desc, &mSwapChain);
+		RHI_SwapChainDesc desc = {};
+		desc.windowHandle = handle;
+		desc.presentQueueCount = 1;
+		desc.pPresentQueues = &mGraphicsQueue;
+		desc.width = mFbWidth;
+		desc.height = mFbHeight;
+		desc.imageCount = gImageCount;
+		desc.colorFormat = RHI_getRecommendedSwapchainFormat(true);
+		desc.enableVsync = true;
+		desc.colorClearValue = mLoadActions.clearColorValues[0];
+		RHI_addSwapChain(mRenderer, &desc, &mSwapChain);
 
 		if (mSwapChain == NULL)
 			return false;
@@ -470,24 +474,24 @@ bool Demo::createSwapchainResources()
 
 	//create depth buffer
 	{
-		RenderTargetDesc desc = {};
-		desc.mArraySize = 1;
-		desc.mClearValue = mLoadActions.mClearDepth;
-		desc.mDepth = 1;
-		desc.mFormat = TinyImageFormat_D32_SFLOAT;
-		desc.mHeight = mFbHeight;
-		desc.mSampleCount = SAMPLE_COUNT_1;
-		desc.mSampleQuality = 0;
-		desc.mWidth = mFbWidth;
-		desc.mFlags = TEXTURE_CREATION_FLAG_ON_TILE;
-		addRenderTarget(mRenderer, &desc, &mDepthBuffer);
+		RHI_RenderTargetDesc desc = {};
+		desc.arraySize = 1;
+		desc.clearValue = mLoadActions.clearDepth;
+		desc.depth = 1;
+		desc.format = RHI_IMAGE_FORMAT_D32_SFLOAT;
+		desc.height = mFbHeight;
+		desc.sampleCount = RHI_SAMPLE_COUNT_1;
+		desc.sampleQuality = 0;
+		desc.width = mFbWidth;
+		desc.flags = RHI_TEXTURE_CREATION_FLAG_ON_TILE;
+		RHI_addRenderTarget(mRenderer, &desc, &mDepthBuffer);
 
 		if (mDepthBuffer == NULL)
 			return false;
 	}
 
-	if (!mAppUI.Load(mSwapChain->ppRenderTargets))
-		return false;
+	//if (!mAppUI.Load(mSwapChain->ppRenderTargets))
+	//	return false;
 
 	return true;
 }
@@ -510,7 +514,7 @@ void Demo::onRender()
 	}
 
 	//update UI
-	mAppUI.Update(deltaTime);
+	//mAppUI.Update(deltaTime);
 
 	//cube rotation - make it spin slowly
 	mRotation += deltaTime * mRotationSpeed;
@@ -520,92 +524,94 @@ void Demo::onRender()
 	const glm::mat4 worldViewProj = mProjMatrix * mViewMatrix *mModelMatrix;
 
 	//aquire the next swapchain image
-	acquireNextImage(mRenderer, mSwapChain, mImageAcquiredSemaphore, NULL, &mFrameIndex);
+	RHI_acquireNextImage(mRenderer, mSwapChain, mImageAcquiredSemaphore, NULL, &mFrameIndex);
 
 	//make it easier on our fingers :)
-	RenderTarget* pRenderTarget = mSwapChain->ppRenderTargets[mFrameIndex];
-	Semaphore*    pRenderCompleteSemaphore = mRenderCompleteSemaphores[mFrameIndex];
-	Fence*        pRenderCompleteFence = mRenderCompleteFences[mFrameIndex];
+	RHI_RenderTargetHandle pRenderTarget = RHI_swapChainGetRenderTarget(mSwapChain, mFrameIndex);
+	RHI_SemaphoreHandle    pRenderCompleteSemaphore = mRenderCompleteSemaphores[mFrameIndex];
+	RHI_FenceHandle        pRenderCompleteFence = mRenderCompleteFences[mFrameIndex];
 
 	// Stall if CPU is running "Swap Chain Buffer Count" frames ahead of GPU
-	FenceStatus fenceStatus;
-	getFenceStatus(mRenderer, pRenderCompleteFence, &fenceStatus);
-	if (fenceStatus == FENCE_STATUS_INCOMPLETE)
-		waitForFences(mRenderer, 1, &pRenderCompleteFence);
+	RHI_FenceStatus fenceStatus;
+	RHI_getFenceStatus(mRenderer, pRenderCompleteFence, &fenceStatus);
+	if (fenceStatus == RHI_FENCE_STATUS_INCOMPLETE)
+		RHI_waitForFences(mRenderer, 1, &pRenderCompleteFence);
 
 	//command buffer for this frame
-	Cmd* pCmd = mCmds[mFrameIndex];
-	beginCmd(pCmd);
+	RHI_CmdHandle pCmd = mCmds[mFrameIndex];
+	RHI_beginCmd(pCmd);
 
 	//transition our render & depth target to a state that we can write to
-	RenderTargetBarrier barriers[] = 
+	RHI_RenderTargetBarrier barriers[] = 
 	{
-		{ pRenderTarget, RESOURCE_STATE_RENDER_TARGET },
-		{ mDepthBuffer, RESOURCE_STATE_DEPTH_WRITE },
+		{ pRenderTarget, RHI_RESOURCE_STATE_RENDER_TARGET },
+		{ mDepthBuffer, RHI_RESOURCE_STATE_DEPTH_WRITE },
 	};
-	cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 2, barriers);
+	RHI_cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 2, barriers);
 
 	//bind render and depth target and set the viewport and scissor rectangle
-	mLoadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
-   mLoadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
-	cmdBindRenderTargets(pCmd, 1, &pRenderTarget, mDepthBuffer, &mLoadActions, NULL, NULL, -1, -1);
-	cmdSetViewport(pCmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 0.0f, 1.0f);
-	cmdSetScissor(pCmd, 0, 0, pRenderTarget->mWidth, pRenderTarget->mHeight);
+	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_CLEAR;
+	RHI_RenderTargetDesc rtDesc = {};
+	RHI_renderTargetGetDesc(pRenderTarget, rtDesc);
+	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, mDepthBuffer, &mLoadActions, NULL, NULL, -1, -1);
+	RHI_cmdSetViewport(pCmd, 0.0f, 0.0f, (float)rtDesc.width, (float)rtDesc.height, 0.0f, 1.0f);
+	RHI_cmdSetScissor(pCmd, 0, 0, rtDesc.width, rtDesc.height);
 
 	//bind descriptor set
-	cmdBindDescriptorSet(pCmd, 0, mDescriptorSet);
+	RHI_cmdBindDescriptorSet(pCmd, 0, mDescriptorSet);
 	//bind pipeline state object
-	cmdBindPipeline(pCmd, mGraphicsPipeline);
+	RHI_cmdBindPipeline(pCmd, mGraphicsPipeline);
 	//bind index buffer
-	cmdBindIndexBuffer(pCmd, mIndexBuffer, INDEX_TYPE_UINT16, 0);
+	RHI_cmdBindIndexBuffer(pCmd, mIndexBuffer, RHI_INDEX_TYPE_UINT16, 0);
 	//bind vert buffer
 	const uint32_t stride = sizeof(Vertex);
-	cmdBindVertexBuffer(pCmd, 1, &mVertexBuffer, &stride, NULL);
+	RHI_cmdBindVertexBuffer(pCmd, 1, &mVertexBuffer, &stride, NULL);
 	//bind the push constant
-	cmdBindPushConstants(pCmd, mRootSignature, "UniformBlockRootConstant", &worldViewProj);
+	RHI_cmdBindPushConstants(pCmd, mRootSignature, "UniformBlockRootConstant", &worldViewProj);
 	//draw our cube
-	cmdDrawIndexed(pCmd, mIndexCount, 0, 0);
+	RHI_cmdDrawIndexed(pCmd, mIndexCount, 0, 0);
 
 	//draw UI - we want the swapchain render target bound without the depth buffer
-	mLoadActions.mLoadActionsColor[0] = LOAD_ACTION_LOAD;
-   mLoadActions.mLoadActionDepth = LOAD_ACTION_DONTCARE;
-	cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
-	mAppUI.Gui(mGuiWindow);
-	mAppUI.Draw(pCmd);
+	//mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
+	//mLoadActions.loadActionDepth = RHI_LOAD_ACTION_DONTCARE;
+	//RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
+	//mAppUI.Gui(mGuiWindow);
+	//mAppUI.Draw(pCmd);
 
 	//make sure no render target is bound
-	cmdBindRenderTargets(pCmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
+	RHI_cmdBindRenderTargets(pCmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
 	//transition render target to a present state
-	barriers[0] = { pRenderTarget, RESOURCE_STATE_PRESENT };
-	cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 1, barriers);
+	barriers[0] = { pRenderTarget, RHI_RESOURCE_STATE_PRESENT };
+	RHI_cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 1, barriers);
 
 	//end the command buffer
-	endCmd(pCmd);
+	RHI_endCmd(pCmd);
 
 	//submit the graphics queue
-	QueueSubmitDesc submitDesc = {};
-	submitDesc.mCmdCount = 1;
-	submitDesc.mSignalSemaphoreCount = 1;
-	submitDesc.mWaitSemaphoreCount = 1;
-	submitDesc.ppCmds = &pCmd;
-	submitDesc.ppSignalSemaphores = &pRenderCompleteSemaphore;
-	submitDesc.ppWaitSemaphores = &mImageAcquiredSemaphore;
-	submitDesc.pSignalFence = pRenderCompleteFence;
-	queueSubmit(mGraphicsQueue, &submitDesc);
+	RHI_QueueSubmitDesc submitDesc = {};
+	submitDesc.cmdCount = 1;
+	submitDesc.signalSemaphoreCount = 1;
+	submitDesc.waitSemaphoreCount = 1;
+	submitDesc.pCmds = &pCmd;
+	submitDesc.pSignalSemaphores = &pRenderCompleteSemaphore;
+	submitDesc.pWaitSemaphores = &mImageAcquiredSemaphore;
+	submitDesc.signalFence = pRenderCompleteFence;
+	RHI_queueSubmit(mGraphicsQueue, &submitDesc);
 
 	//present the graphics queue
-	QueuePresentDesc presentDesc = {};
-	presentDesc.mIndex = mFrameIndex;
-	presentDesc.mWaitSemaphoreCount = 1;
-	presentDesc.pSwapChain = mSwapChain;
-	presentDesc.ppWaitSemaphores = &pRenderCompleteSemaphore;
-	presentDesc.mSubmitDone = true;
-	queuePresent(mGraphicsQueue, &presentDesc);
+	RHI_QueuePresentDesc presentDesc = {};
+	presentDesc.index = mFrameIndex;
+	presentDesc.waitSemaphoreCount = 1;
+	presentDesc.swapChain = mSwapChain;
+	presentDesc.pWaitSemaphores = &pRenderCompleteSemaphore;
+	presentDesc.submitDone = true;
+	RHI_queuePresent(mGraphicsQueue, &presentDesc);
 
 	//check v-sync
-	if (mSwapChain->mEnableVsync != mVSyncEnabled)
+	if (RHI_swapChainGetVSync(mSwapChain) != mVSyncEnabled)
 	{
-		waitQueueIdle(mGraphicsQueue);
-		toggleVSync(mRenderer, &mSwapChain);
+		RHI_waitQueueIdle(mGraphicsQueue);
+		RHI_toggleVSync(mRenderer, &mSwapChain);
 	}
 }
