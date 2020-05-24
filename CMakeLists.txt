@@ -42,6 +42,10 @@ else()
 	file(GLOB FORGEIMPL_SRC "${DEMO_DIR}/src/interfaces/linux/*.*")
 endif()
 
+#RHI C-API 
+set(RHI_SRC "${DEMO_DIR}/src/rhi/private/rhi.cpp")
+file(GLOB RHI_H "${DEMO_DIR}/src/rhi/*.*")
+
 #includes
 set(DEMO_INCLUDES
 	${DEMO_DIR}/src
@@ -71,7 +75,7 @@ if(D3D12)
 endif()
 
 #set all source code
-set(DEMO_SRC ${DEMO_SRC} ${FORGEIMPL_SRC})
+set(DEMO_SRC ${DEMO_SRC} ${FORGEIMPL_SRC} ${RHI_SRC} ${RHI_H})
 
 #Executable
 if(WIN32)
