@@ -104,6 +104,7 @@ typedef struct RHI_RenderTargetDesc {
 	uint32_t sampleQuality;
 	/// Descriptor creation
 	RHI_DescriptorType descriptors;
+	const void* pNativeHandle;
 	/// Debug name used in gpu profile
 	char const *debugName;
 	/// GPU indices to share this texture
@@ -146,8 +147,10 @@ typedef struct RHI_BinaryShaderStageDesc {
 	const char *entryPoint;
 
 	// Shader source is needed for reflection on Metal only
+#if defined(METAL)
 	char *source;
 	uint32_t sourceSize;
+#endif
 } RHI_BinaryShaderStageDesc;
 
 typedef struct RHI_BinaryShaderDesc {
@@ -332,7 +335,9 @@ typedef struct RHI_CmdPoolDesc
 typedef struct RHI_CmdDesc
 {
 	RHI_CmdPoolHandle pool;
+#if defined(ORBIS)
 	uint32_t maxSize; // ORBIS-only
+#endif
 	bool secondary;
 } RHI_CmdDesc;
 
@@ -373,7 +378,7 @@ typedef struct RHI_DescriptorData {
 		RHI_AcclerationStructureHandle const *pAccelerationStructures;
 	};
 	uint32_t count;
-	uint32_t index;
+	uint32_t index = (uint32_t)-1;
 	bool extractBuffer;
 } RHI_DescriptorData;
 
@@ -473,6 +478,7 @@ typedef struct RHI_IndirectDispatchArguments {
 
 typedef struct RHI_IndirectArgumentDescriptor {
 	RHI_IndirectArgumentType mType;
+	const char* pName;
 	uint32_t mRootParameterIndex;
 	uint32_t mCount;
 	uint32_t mDivisor;

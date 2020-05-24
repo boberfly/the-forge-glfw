@@ -17,10 +17,10 @@ RHI_API void RHI_addBufferResource(RHI_BufferLoadDesc *pBufferDesc, RHI_SyncToke
 RHI_API void RHI_addTextureResource(RHI_TextureLoadDesc *pTextureDesc, RHI_SyncToken *token, RHI_LoadPriority priority);
 //RHI_API void RHI_addGeometryResource(RHI_GeometryLoadDesc *pGeomDesc, RHI_SyncToken *token, RHI_LoadPriority priority);
 
-RHI_API void RHI_beginUpdateBuffer(RHI_BufferUpdateDesc const *pBuffer);
-RHI_API void RHI_beginUpdateTexture(RHI_TextureUpdateDesc const *pTexture);
-RHI_API void RHI_endUpdateBuffer(RHI_BufferUpdateDesc *pBuffer, RHI_SyncToken *token);
-RHI_API void RHI_endUpdateTexture(RHI_TextureUpdateDesc *pTexture, RHI_SyncToken *token);
+RHI_API void RHI_beginUpdateBufferResource(RHI_BufferUpdateDesc const *pBuffer);
+RHI_API void RHI_beginUpdateTextureResource(RHI_TextureUpdateDesc const *pTexture);
+RHI_API void RHI_endUpdateBufferResource(RHI_BufferUpdateDesc *pBuffer, RHI_SyncToken *token);
+RHI_API void RHI_endUpdateTextureResource(RHI_TextureUpdateDesc *pTexture, RHI_SyncToken *token);
 
 RHI_API void RHI_removeBufferResource(RHI_BufferHandle pBuffer);
 RHI_API void RHI_removeTextureResource(RHI_TextureHandle pTexture);
@@ -30,7 +30,7 @@ RHI_API bool RHI_allResourceLoadsCompleted();
 
 RHI_API void RHI_waitForAllResourceLoads();
 
-RHI_SyncToken RHI_getLastTokenCompleted();
+RHI_API RHI_SyncToken RHI_getLastTokenCompleted();
 RHI_API bool RHI_isTokenCompleted(const RHI_SyncToken *token);
 RHI_API void RHI_waitForToken(const RHI_SyncToken *token);
 

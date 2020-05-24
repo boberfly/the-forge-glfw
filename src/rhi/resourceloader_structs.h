@@ -115,6 +115,12 @@ typedef struct RHI_TextureUpdateDesc
 {
 	RHI_TextureHandle texture;
 	RHI_RawImageData* pRawImageData;
+
+	void* pMappedData;
+	struct
+	{
+		RHI_MappedMemoryRange mMappedRange;
+	} mInternalData;
 } RHI_TextureUpdateDesc;
 
 typedef struct RHI_ShaderStageLoadDesc

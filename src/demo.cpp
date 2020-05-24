@@ -31,8 +31,8 @@ Demo::~Demo()
 	if (mRenderer != NULL)
 	{
 		RHI_waitQueueIdle(mGraphicsQueue);
-		//mAppUI.Unload();
-		//mAppUI.Exit();
+		mAppUI.Unload();
+		mAppUI.Exit();
 
 		//resources
 		RHI_removeTextureResource(mTexture);
@@ -179,10 +179,10 @@ bool Demo::init(GLFWwindow *pWindow)
 	RHI_addSemaphore(mRenderer, &mImageAcquiredSemaphore);
 
 	//UI - create before swapchain as createSwapchainResources calls into mAppUI
-	//if (!mAppUI.Init((Renderer *)mRenderer))
-	//	return false;
+	if (!mAppUI.Init((Renderer *)mRenderer))
+		return false;
 
-	//mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf", RD_BUILTIN_FONTS);
+	mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf", RD_BUILTIN_FONTS);
 
 	//Load action for the render and depth target
 	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
@@ -382,7 +382,6 @@ bool Demo::init(GLFWwindow *pWindow)
 	}
 
 	//add a gui component
-	/*
 	{
 		GuiDesc desc = {};
 		const float dpiScale = getDpiScale().x;
@@ -393,7 +392,6 @@ bool Demo::init(GLFWwindow *pWindow)
 		mGuiWindow->AddWidget(CheckboxWidget("V-Sync", &mVSyncEnabled));
 		mGuiWindow->AddWidget(SliderFloatWidget("Rotation Speed", &mRotationSpeed, 0.0f, 1.0f, 0.1f));
 	}
-	*/
 
 
 	//matrices
@@ -420,7 +418,7 @@ void Demo::onSize(const int32_t width, const int32_t height)
 	//remove old swapchain and depth buffer
 	RHI_removeSwapChain(mRenderer, mSwapChain);
 	RHI_removeRenderTarget(mRenderer, mDepthBuffer);
-	//mAppUI.Unload();
+	mAppUI.Unload();
 
 	//create new swapchain and depth buffer
 	createSwapchainResources();
@@ -441,7 +439,7 @@ void Demo::onMouseButton(int32_t button, int32_t action)
 		buttonPressed = true;
 
 	//the-forge has input bindings that are designed for game controllers, it seems to map left mouse button to BUTTON_SOUTH
-	//mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
+	mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
 }
 
 bool Demo::createSwapchainResources()
@@ -490,8 +488,8 @@ bool Demo::createSwapchainResources()
 			return false;
 	}
 
-	//if (!mAppUI.Load(mSwapChain->ppRenderTargets))
-	//	return false;
+	if (!mAppUI.Load((RenderTarget**)RHI_swapChainGetRenderTarget(mSwapChain, 1)))
+		return false;
 
 	return true;
 }
@@ -514,7 +512,7 @@ void Demo::onRender()
 	}
 
 	//update UI
-	//mAppUI.Update(deltaTime);
+	mAppUI.Update(deltaTime);
 
 	//cube rotation - make it spin slowly
 	mRotation += deltaTime * mRotationSpeed;
@@ -573,11 +571,11 @@ void Demo::onRender()
 	RHI_cmdDrawIndexed(pCmd, mIndexCount, 0, 0);
 
 	//draw UI - we want the swapchain render target bound without the depth buffer
-	//mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
-	//mLoadActions.loadActionDepth = RHI_LOAD_ACTION_DONTCARE;
-	//RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
-	//mAppUI.Gui(mGuiWindow);
-	//mAppUI.Draw(pCmd);
+	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
+	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_DONTCARE;
+	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
+	mAppUI.Gui(mGuiWindow);
+	mAppUI.Draw((Cmd*)pCmd);
 
 	//make sure no render target is bound
 	RHI_cmdBindRenderTargets(pCmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
