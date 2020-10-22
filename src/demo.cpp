@@ -22,7 +22,7 @@
 #include <OS/Interfaces/IInput.h>
 
 //The-forge memory allocator
-extern bool MemAllocInit();
+extern bool MemAllocInit(const char*);
 extern void MemAllocExit();
 
 Demo::~Demo()
@@ -31,8 +31,8 @@ Demo::~Demo()
 	if (mRenderer != NULL)
 	{
 		RHI_waitQueueIdle(mGraphicsQueue);
-		mAppUI.Unload();
-		mAppUI.Exit();
+		//.Unload();
+		//mAppUI.Exit();
 
 		//resources
 		RHI_removeTextureResource(mTexture);
@@ -63,7 +63,7 @@ Demo::~Demo()
 	}
 
 	Log::Exit();
-   fsExitAPI();
+    //fsExitAPI();
 	MemAllocExit();
 }
 
@@ -72,34 +72,24 @@ bool Demo::init(GLFWwindow *pWindow)
 	//store the window pointer
 	mWindow = pWindow;
 
+    // Init FS
+	FileSystemInitDesc fsDesc = {};
+	fsDesc.pAppName = "The-Forge Demo";
+	
+    if (!initFileSystem(&fsDesc))
+        return EXIT_FAILURE;
+
+    fsSetPathForResourceDir(pSystemFileIO, RM_DEBUG, RD_LOG, "");
+
 	//init memory allocator
-	if (!MemAllocInit())
+	if (!MemAllocInit("The-Forge Demo"))
 	{
 		printf("Failed to init memory allocator\n");
 		return false;
 	}
 
-	//init file system
-	if (!fsInitAPI())
-	{
-		printf("Failed to init file system\n");
-		return false;
-	}
-
 	//init the log
-	Log::Init();
-
-	//set the root folder path
-	PathHandle programDirectory = fsGetApplicationDirectory();
-	if (!fsPlatformUsesBundledResources())
-	{
-      fsSetResourceDirRootPath(programDirectory);
-	}
-	else
-	{
-      LOGF(LogLevel::eERROR, "We don't support bundled resources");
-		return false;
-	}
+	Log::Init("The-Forge Demo");
 
 	//work out which api we are using
 	RHI_RendererApi api;
@@ -115,12 +105,12 @@ bool Demo::init(GLFWwindow *pWindow)
 	switch (api)
 	{
 	case RHI_RENDERER_API_D3D12:
-      fsSetRelativePathForResourceDirEnum(RD_SHADER_SOURCES, "shaders/d3d12/");
-      fsSetRelativePathForResourceDirEnum(RD_SHADER_BINARIES, "shaders/d3d12/binary/");
+		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SHADER_SOURCES, "shaders/d3d12/");
+		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SHADER_BINARIES, "shaders/d3d12/binary/");
 		break;
 	case RHI_RENDERER_API_VULKAN:
-      fsSetRelativePathForResourceDirEnum(RD_SHADER_SOURCES, "shaders/vulkan/");
-      fsSetRelativePathForResourceDirEnum(RD_SHADER_BINARIES, "shaders/vulkan/binary/");
+		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SHADER_SOURCES, "shaders/vulkan/");
+		fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_SHADER_BINARIES, "shaders/vulkan/binary/");
 		break;
 	default:
       LOGF(LogLevel::eERROR, "No support for this API");
@@ -128,15 +118,11 @@ bool Demo::init(GLFWwindow *pWindow)
 	}
 
 	//set texture dir
-	fsSetRelativePathForResourceDirEnum(RD_TEXTURES, "textures/");
+	fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_TEXTURES, "textures");
 	//set font dir
-	fsSetRelativePathForResourceDirEnum(RD_BUILTIN_FONTS, "fonts/");
+	fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_FONTS, "fonts");
 	//set GPUCfg dir
-	fsSetRelativePathForResourceDirEnum(RD_GPU_CONFIG, "gpucfg/");
-	//set UI dir
-	fsSetRelativePathForResourceDirEnum(RD_MIDDLEWARE_UI, "ui/");
-	//set Text dir
-	fsSetRelativePathForResourceDirEnum(RD_MIDDLEWARE_TEXT, "text/");
+	fsSetPathForResourceDir(pSystemFileIO, RM_CONTENT, RD_GPU_CONFIG, "gpucfg");
 
 	//get framebuffer size, it may be different from window size
 	glfwGetFramebufferSize(pWindow, &mFbWidth, &mFbHeight);
@@ -144,10 +130,10 @@ bool Demo::init(GLFWwindow *pWindow)
 	//init renderer interface
 	RHI_RendererDesc rendererDesc = {};
 	//rendererDesc.api = api;
-	rendererDesc.gpuMode = RHI_GPU_MODE_SINGLE;
-	rendererDesc.shaderTarget = RHI_SHADER_TARGET_5_1; //5_1 will do for this demo
+	rendererDesc.mGpuMode = RHI_GPU_MODE_SINGLE;
+	rendererDesc.mShaderTarget = RHI_shader_target_5_1; //5_1 will do for this demo
 
-	mRenderer = RHI_initRenderer("The-Forge Demo", &rendererDesc);
+	RHI_initRenderer("The-Forge Demo", &rendererDesc, &mRenderer);
 	if (mRenderer == NULL)
 		return false;
 
@@ -156,18 +142,18 @@ bool Demo::init(GLFWwindow *pWindow)
 
 	//create graphics queue
 	RHI_QueueDesc queueDesc = {};
-	queueDesc.type = RHI_QUEUE_TYPE_GRAPHICS;
-	queueDesc.flags = RHI_QUEUE_FLAG_NONE;//use RHI_QUEUE_FLAG_INIT_MICROPROFILE to enable profiling;
+	queueDesc.mType = RHI_QUEUE_TYPE_GRAPHICS;
+	queueDesc.mFlag = RHI_QUEUE_FLAG_NONE;//use RHI_QUEUE_FLAG_INIT_MICROPROFILE to enable profiling;
 	RHI_addQueue(mRenderer, &queueDesc, &mGraphicsQueue);
 
 	//create command pool for the graphics queue
 	RHI_CmdPoolDesc cmdPoolDesc = {};
-	cmdPoolDesc.queue = mGraphicsQueue;
+	cmdPoolDesc.pQueue = mGraphicsQueue;
 	RHI_addCmdPool(mRenderer, &cmdPoolDesc, &mCmdPool);
 
 	//create command buffer for each potential swapchain image
 	RHI_CmdDesc cmdDesc = {};
-	cmdDesc.pool = mCmdPool;
+	cmdDesc.pPool = mCmdPool;
 	RHI_addCmd_n(mRenderer, &cmdDesc, gImageCount, &mCmds);
 
 	//create sync objects
@@ -179,20 +165,20 @@ bool Demo::init(GLFWwindow *pWindow)
 	RHI_addSemaphore(mRenderer, &mImageAcquiredSemaphore);
 
 	//UI - create before swapchain as createSwapchainResources calls into mAppUI
-	if (!mAppUI.Init((Renderer *)mRenderer))
-		return false;
+	//if (!mAppUI.Init((Renderer *)mRenderer))
+	//	return false;
 
-	mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf", RD_BUILTIN_FONTS);
+	//mAppUI.LoadFont("TitilliumText/TitilliumText-Bold.otf");
 
 	//Load action for the render and depth target
-	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
-	mLoadActions.clearColorValues[0].r = 0.2f;
-	mLoadActions.clearColorValues[0].g = 0.2f;
-	mLoadActions.clearColorValues[0].b = 0.2f;
-	mLoadActions.clearColorValues[0].a = 0.0f;
-	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_CLEAR;
-	mLoadActions.clearDepth.depth = 1.0f;
-	mLoadActions.clearDepth.stencil = 0;
+	mLoadActions.mLoadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.mClearColorValues[0].r = 0.2f;
+	mLoadActions.mClearColorValues[0].g = 0.2f;
+	mLoadActions.mClearColorValues[0].b = 0.2f;
+	mLoadActions.mClearColorValues[0].a = 0.0f;
+	mLoadActions.mLoadActionDepth = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.mClearDepth.depth = 1.0f;
+	mLoadActions.mClearDepth.stencil = 0;
 
 	//create swapchain and depth buffer
 	if (!createSwapchainResources())
@@ -235,13 +221,13 @@ bool Demo::init(GLFWwindow *pWindow)
 		};
 
 		RHI_BufferLoadDesc desc = {};
-		desc.pBuffer = &mVertexBuffer;
+		desc.ppBuffer = &mVertexBuffer;
 		desc.pData = vertices.data();
 		desc.mDesc.mDescriptors = RHI_DESCRIPTOR_TYPE_VERTEX_BUFFER;
 		desc.mDesc.mSize = vertices.size() * sizeof(Vertex);
 		desc.mDesc.mMemoryUsage = RHI_RESOURCE_MEMORY_USAGE_GPU_ONLY;
 
-		RHI_addBufferResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
+		RHI_addBufferResource(&desc, NULL);
 	}
 
 	//index buffer
@@ -265,23 +251,22 @@ bool Demo::init(GLFWwindow *pWindow)
 		mIndexCount = (uint16_t)indices.size();
 
 		RHI_BufferLoadDesc desc = {};
-		desc.pBuffer = &mIndexBuffer;
+		desc.ppBuffer = &mIndexBuffer;
 		desc.pData = indices.data();
 		desc.mDesc.mDescriptors = RHI_DESCRIPTOR_TYPE_INDEX_BUFFER;
 		desc.mDesc.mSize = mIndexCount * sizeof(uint16_t);
 		desc.mDesc.mMemoryUsage = RHI_RESOURCE_MEMORY_USAGE_GPU_ONLY;
 
-		RHI_addBufferResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
+		RHI_addBufferResource(&desc, NULL);
 	}
 
 	//texture
 	{
-		PathHandle path = fsGetPathInResourceDirEnum(RD_TEXTURES, "the-forge.dds");
 		RHI_TextureLoadDesc desc = {};
-		desc.pTexture = &mTexture;
-		desc.pFilePath = path;
+		desc.ppTexture = &mTexture;
+		desc.pFileName = "the-forge";
 
-		RHI_addTextureResource(&desc, NULL, RHI_LOAD_PRIORITY_NORMAL);
+		RHI_addTextureResource(&desc, NULL);
 	}
 
 	//sampler 
@@ -296,22 +281,22 @@ bool Demo::init(GLFWwindow *pWindow)
 	//shader
 	{
 		RHI_ShaderLoadDesc desc = {};
-		desc.mStages[0] = { "demo.vert", NULL, 0, RHI_RD_SHADER_SOURCES };
-		desc.mStages[1] = { "demo.frag", NULL, 0, RHI_RD_SHADER_SOURCES };
-		desc.mTarget = RHI_SHADER_TARGET_5_1;
+		desc.mStages[0] = { "demo.vert", NULL, 0 };
+		desc.mStages[1] = { "demo.frag", NULL, 0 };
+		desc.mTarget = RHI_shader_target_5_1;
 
-		RHI_addShaderResource(mRenderer, &desc, &mShader);
+		RHI_loadShader(mRenderer, &desc, &mShader);
 	}
 
 	//root signature
 	{
 		const char* pStaticSamplers[] = { "samplerState0" };
 		RHI_RootSignatureDesc desc = {};
-		desc.staticSamplerCount = 1;
+		desc.mStaticSamplerCount = 1;
 		desc.ppStaticSamplerNames = pStaticSamplers;
-		desc.pStaticSamplers = &mSampler;
-		desc.shaderCount = 1;
-		desc.pShaders = &mShader;
+		desc.ppStaticSamplers = &mSampler;
+		desc.mShaderCount = 1;
+		desc.ppShaders = &mShader;
 
 		RHI_addRootSignature(mRenderer, &desc, &mRootSignature);
 	}
@@ -328,7 +313,7 @@ bool Demo::init(GLFWwindow *pWindow)
 		//now update the data
 		RHI_DescriptorData params[1] = {};
 		params[0].pName = "texture0";
-		params[0].pTextures = &mTexture;
+		params[0].ppTextures = &mTexture;
 		RHI_updateDescriptorSet(mRenderer, 0, mDescriptorSet, 1, params);
 	}
 
@@ -336,45 +321,45 @@ bool Demo::init(GLFWwindow *pWindow)
 	{
 		//vertex layout
 		RHI_VertexLayout vertexLayout = {};
-		vertexLayout.attribCount = 2;
-		vertexLayout.attribs[0].semantic = RHI_SEMANTIC_POSITION;
-		vertexLayout.attribs[0].format = RHI_IMAGE_FORMAT_R32G32B32_SFLOAT;
-		vertexLayout.attribs[0].binding = 0;
-		vertexLayout.attribs[0].location = 0;
-		vertexLayout.attribs[0].offset = 0;
-		vertexLayout.attribs[1].semantic = RHI_SEMANTIC_TEXCOORD0;
-		vertexLayout.attribs[1].format = RHI_IMAGE_FORMAT_R32G32_SFLOAT;
-		vertexLayout.attribs[1].binding = 0;
-		vertexLayout.attribs[1].location = 1;
-		vertexLayout.attribs[1].offset = 12;
+		vertexLayout.mAttribCount = 2;
+		vertexLayout.mAttribs[0].mSemantic = RHI_SEMANTIC_POSITION;
+		vertexLayout.mAttribs[0].mFormat = RHI_IMAGEFORMAT_R32G32B32_SFLOAT;
+		vertexLayout.mAttribs[0].mBinding = 0;
+		vertexLayout.mAttribs[0].mLocation = 0;
+		vertexLayout.mAttribs[0].mOffset = 0;
+		vertexLayout.mAttribs[1].mSemantic = RHI_SEMANTIC_TEXCOORD0;
+		vertexLayout.mAttribs[1].mFormat = RHI_IMAGEFORMAT_R32G32_SFLOAT;
+		vertexLayout.mAttribs[1].mBinding = 0;
+		vertexLayout.mAttribs[1].mLocation = 1;
+		vertexLayout.mAttribs[1].mOffset = 12;
 
 		//rasterizer
 		RHI_RasterizerStateDesc rasterizerStateDesc = {};
-		rasterizerStateDesc.cullMode = RHI_CULL_MODE_BACK;
+		rasterizerStateDesc.mCullMode = RHI_CULL_MODE_BACK;
 
 		//depth state
 		RHI_DepthStateDesc depthStateDesc = {};
-		depthStateDesc.depthTest = true;
-		depthStateDesc.depthWrite = true;
-		depthStateDesc.depthFunc = RHI_CMP_LEQUAL;
+		depthStateDesc.mDepthTest = true;
+		depthStateDesc.mDepthWrite = true;
+		depthStateDesc.mDepthFunc = RHI_CMP_LEQUAL;
 
 		//pipeline
 		RHI_PipelineDesc desc = {};
-		desc.type = RHI_PIPELINE_TYPE_GRAPHICS;
-		RHI_GraphicsPipelineDesc& pipelineSettings = desc.graphicsDesc;
-		pipelineSettings.primitiveTopo = RHI_PRIMITIVE_TOPO_TRI_LIST;
-		pipelineSettings.renderTargetCount = 1;
+		desc.mType = RHI_PIPELINE_TYPE_GRAPHICS;
+		RHI_GraphicsPipelineDesc& pipelineSettings = desc.mGraphicsDesc;
+		pipelineSettings.mPrimitiveTopo = RHI_PRIMITIVE_TOPO_TRI_LIST;
+		pipelineSettings.mRenderTargetCount = 1;
 		pipelineSettings.pDepthState = &depthStateDesc;
 		RHI_RenderTargetDesc rtDesc = {};
 		RHI_renderTargetGetDesc(RHI_swapChainGetRenderTarget(mSwapChain, 0), rtDesc);
 		RHI_RenderTargetDesc depthRtDesc = {};
 		RHI_renderTargetGetDesc(mDepthBuffer, depthRtDesc);
-		pipelineSettings.pColorFormats = &rtDesc.format;
-		pipelineSettings.sampleCount = rtDesc.sampleCount;
-		pipelineSettings.sampleQuality = rtDesc.sampleQuality;
-		pipelineSettings.depthStencilFormat = depthRtDesc.format;
-		pipelineSettings.rootSignature = mRootSignature;
-		pipelineSettings.shaderProgram = mShader;
+		pipelineSettings.pColorFormats = &rtDesc.mFormat;
+		pipelineSettings.mSampleCount = rtDesc.mSampleCount;
+		pipelineSettings.mSampleQuality = rtDesc.mSampleQuality;
+		pipelineSettings.mDepthStencilFormat = depthRtDesc.mFormat;
+		pipelineSettings.pRootSignature = mRootSignature;
+		pipelineSettings.pShaderProgram = mShader;
 		pipelineSettings.pVertexLayout = &vertexLayout;
 		pipelineSettings.pRasterizerState = &rasterizerStateDesc;
 
@@ -388,9 +373,9 @@ bool Demo::init(GLFWwindow *pWindow)
 		desc.mStartPosition = vec2(10.0f, 10.0f) / dpiScale;
 		desc.mStartSize = vec2(120.0f, 110.0f) / dpiScale;
 
-		mGuiWindow = mAppUI.AddGuiComponent("Gui Test", &desc);
-		mGuiWindow->AddWidget(CheckboxWidget("V-Sync", &mVSyncEnabled));
-		mGuiWindow->AddWidget(SliderFloatWidget("Rotation Speed", &mRotationSpeed, 0.0f, 1.0f, 0.1f));
+		//mGuiWindow = mAppUI.AddGuiComponent("Gui Test", &desc);
+		//mGuiWindow->AddWidget(CheckboxWidget("V-Sync", &mVSyncEnabled));
+		//mGuiWindow->AddWidget(SliderFloatWidget("Rotation Speed", &mRotationSpeed, 0.0f, 1.0f, 0.1f));
 	}
 
 
@@ -418,7 +403,7 @@ void Demo::onSize(const int32_t width, const int32_t height)
 	//remove old swapchain and depth buffer
 	RHI_removeSwapChain(mRenderer, mSwapChain);
 	RHI_removeRenderTarget(mRenderer, mDepthBuffer);
-	mAppUI.Unload();
+	//mAppUI.Unload();
 
 	//create new swapchain and depth buffer
 	createSwapchainResources();
@@ -439,7 +424,7 @@ void Demo::onMouseButton(int32_t button, int32_t action)
 		buttonPressed = true;
 
 	//the-forge has input bindings that are designed for game controllers, it seems to map left mouse button to BUTTON_SOUTH
-	mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
+	//mAppUI.OnButton(InputBindings::BUTTON_SOUTH, buttonPressed, &mMousePosition);
 }
 
 bool Demo::createSwapchainResources()
@@ -448,22 +433,22 @@ bool Demo::createSwapchainResources()
 #ifdef _WIN32
 	handle.window = glfwGetWin32Window(mWindow);
 #else
-	handle.window = glfwGetX11Window(mWindow);
-	handle.display = glfwGetX11Display();
+	handle.window = (void *)glfwGetX11Window(mWindow);
+	handle.display = (void *)glfwGetX11Display();
 #endif
 
 	//create swapchain
 	{
 		RHI_SwapChainDesc desc = {};
-		desc.windowHandle = handle;
-		desc.presentQueueCount = 1;
-		desc.pPresentQueues = &mGraphicsQueue;
-		desc.width = mFbWidth;
-		desc.height = mFbHeight;
-		desc.imageCount = gImageCount;
-		desc.colorFormat = RHI_getRecommendedSwapchainFormat(true);
-		desc.enableVsync = true;
-		desc.colorClearValue = mLoadActions.clearColorValues[0];
+		desc.mWindowHandle = handle;
+		desc.mPresentQueueCount = 1;
+		desc.ppPresentQueues = &mGraphicsQueue;
+		desc.mWidth = mFbWidth;
+		desc.mHeight = mFbHeight;
+		desc.mImageCount = gImageCount;
+		desc.mColorFormat = RHI_getRecommendedSwapchainFormat(true);
+		desc.mEnableVsync = true;
+		desc.mColorClearValue = mLoadActions.mClearColorValues[0];
 		RHI_addSwapChain(mRenderer, &desc, &mSwapChain);
 
 		if (mSwapChain == NULL)
@@ -473,24 +458,24 @@ bool Demo::createSwapchainResources()
 	//create depth buffer
 	{
 		RHI_RenderTargetDesc desc = {};
-		desc.arraySize = 1;
-		desc.clearValue = mLoadActions.clearDepth;
-		desc.depth = 1;
-		desc.format = RHI_IMAGE_FORMAT_D32_SFLOAT;
-		desc.height = mFbHeight;
-		desc.sampleCount = RHI_SAMPLE_COUNT_1;
-		desc.sampleQuality = 0;
-		desc.width = mFbWidth;
-		desc.flags = RHI_TEXTURE_CREATION_FLAG_ON_TILE;
+		desc.mArraySize = 1;
+		desc.mClearValue = mLoadActions.mClearDepth;
+		desc.mDepth = 1;
+		desc.mFormat = RHI_IMAGEFORMAT_D32_SFLOAT;
+		desc.mHeight = mFbHeight;
+		desc.mSampleCount = RHI_SAMPLE_COUNT_1;
+		desc.mSampleQuality = 0;
+		desc.mWidth = mFbWidth;
+		desc.mFlags = RHI_TEXTURE_CREATION_FLAG_ON_TILE;
 		RHI_addRenderTarget(mRenderer, &desc, &mDepthBuffer);
 
 		if (mDepthBuffer == NULL)
 			return false;
 	}
 
-	RenderTarget* rt = (RenderTarget*)RHI_swapChainGetRenderTarget(mSwapChain, 1);
-	if (!mAppUI.Load(&rt, 1))
-		return false;
+	//RenderTarget* rt = (RenderTarget*)RHI_swapChainGetRenderTarget(mSwapChain, 0);
+	//if (!mAppUI.Load({&rt}, 0))
+	//	return false;
 
 	return true;
 }
@@ -513,7 +498,7 @@ void Demo::onRender()
 	}
 
 	//update UI
-	mAppUI.Update(deltaTime);
+	//mAppUI.Update(deltaTime);
 
 	//cube rotation - make it spin slowly
 	mRotation += deltaTime * mRotationSpeed;
@@ -549,13 +534,13 @@ void Demo::onRender()
 	RHI_cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 2, barriers);
 
 	//bind render and depth target and set the viewport and scissor rectangle
-	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
-	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.mLoadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
+	mLoadActions.mLoadActionDepth = RHI_LOAD_ACTION_CLEAR;
 	RHI_RenderTargetDesc rtDesc = {};
 	RHI_renderTargetGetDesc(pRenderTarget, rtDesc);
 	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, mDepthBuffer, &mLoadActions, NULL, NULL, -1, -1);
-	RHI_cmdSetViewport(pCmd, 0.0f, 0.0f, (float)rtDesc.width, (float)rtDesc.height, 0.0f, 1.0f);
-	RHI_cmdSetScissor(pCmd, 0, 0, rtDesc.width, rtDesc.height);
+	RHI_cmdSetViewport(pCmd, 0.0f, 0.0f, (float)rtDesc.mWidth, (float)rtDesc.mHeight, 0.0f, 1.0f);
+	RHI_cmdSetScissor(pCmd, 0, 0, rtDesc.mWidth, rtDesc.mHeight);
 
 	//bind descriptor set
 	RHI_cmdBindDescriptorSet(pCmd, 0, mDescriptorSet);
@@ -572,11 +557,11 @@ void Demo::onRender()
 	RHI_cmdDrawIndexed(pCmd, mIndexCount, 0, 0);
 
 	//draw UI - we want the swapchain render target bound without the depth buffer
-	mLoadActions.loadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
-	mLoadActions.loadActionDepth = RHI_LOAD_ACTION_DONTCARE;
+	mLoadActions.mLoadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
+	mLoadActions.mLoadActionDepth = RHI_LOAD_ACTION_DONTCARE;
 	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
-	mAppUI.Gui(mGuiWindow);
-	mAppUI.Draw((Cmd*)pCmd);
+	//mAppUI.Gui(mGuiWindow);
+	//mAppUI.Draw((Cmd*)pCmd);
 
 	//make sure no render target is bound
 	RHI_cmdBindRenderTargets(pCmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
@@ -589,22 +574,22 @@ void Demo::onRender()
 
 	//submit the graphics queue
 	RHI_QueueSubmitDesc submitDesc = {};
-	submitDesc.cmdCount = 1;
-	submitDesc.signalSemaphoreCount = 1;
-	submitDesc.waitSemaphoreCount = 1;
-	submitDesc.pCmds = &pCmd;
-	submitDesc.pSignalSemaphores = &pRenderCompleteSemaphore;
-	submitDesc.pWaitSemaphores = &mImageAcquiredSemaphore;
-	submitDesc.signalFence = pRenderCompleteFence;
+	submitDesc.mCmdCount = 1;
+	submitDesc.mSignalSemaphoreCount = 1;
+	submitDesc.mWaitSemaphoreCount = 1;
+	submitDesc.ppCmds = &pCmd;
+	submitDesc.ppSignalSemaphores = &pRenderCompleteSemaphore;
+	submitDesc.ppWaitSemaphores = &mImageAcquiredSemaphore;
+	submitDesc.pSignalFence = pRenderCompleteFence;
 	RHI_queueSubmit(mGraphicsQueue, &submitDesc);
 
 	//present the graphics queue
 	RHI_QueuePresentDesc presentDesc = {};
-	presentDesc.index = mFrameIndex;
-	presentDesc.waitSemaphoreCount = 1;
-	presentDesc.swapChain = mSwapChain;
-	presentDesc.pWaitSemaphores = &pRenderCompleteSemaphore;
-	presentDesc.submitDone = true;
+	presentDesc.mIndex = mFrameIndex;
+	presentDesc.mWaitSemaphoreCount = 1;
+	presentDesc.pSwapChain = mSwapChain;
+	presentDesc.ppWaitSemaphores = &pRenderCompleteSemaphore;
+	presentDesc.mSubmitDone = true;
 	RHI_queuePresent(mGraphicsQueue, &presentDesc);
 
 	//check v-sync

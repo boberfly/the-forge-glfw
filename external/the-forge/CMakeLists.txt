@@ -9,7 +9,6 @@ message(${CMAKE_CURRENT_SOURCE_DIR})
 #OS
 file(GLOB FORGE_OS_INTERFACES "${FORGE_DIR}/Common_3/OS/Interfaces/*.*")
 file(GLOB FORGE_OS_CORE "${FORGE_DIR}/Common_3/OS/Core/*.*")
-file(GLOB FORGE_OS_IMAGE "${FORGE_DIR}/Common_3/OS/Image/*.*")
 file(GLOB FORGE_OS_LOGGING "${FORGE_DIR}/Common_3/OS/Logging/*.*")
 file(GLOB FORGE_OS_MATH "${FORGE_DIR}/Common_3/OS/Math/*.*")
 file(GLOB FORGE_OS_MEMORYTRACKING "${FORGE_DIR}/Common_3/OS/MemoryTracking/*.*")
@@ -17,23 +16,14 @@ file(GLOB FORGE_OS_PROFILER "${FORGE_DIR}/Common_3/OS/Profiler/*.*")
 
 #OS filesystem
 set(FORGE_OS_FILESYSTEM
-	${FORGE_DIR}/Common_3/OS/FileSystem/FileSystemInternal.h
-	${FORGE_DIR}/Common_3/OS/FileSystem/FileSystemInternal.cpp
-	${FORGE_DIR}/Common_3/OS/FileSystem/MemoryStream.h
-	${FORGE_DIR}/Common_3/OS/FileSystem/MemoryStream.cpp
-	${FORGE_DIR}/Common_3/OS/FileSystem/SystemFileStream.h
-	${FORGE_DIR}/Common_3/OS/FileSystem/SystemFileStream.cpp
-	${FORGE_DIR}/Common_3/OS/FileSystem/ZipFileSystem.h
-	${FORGE_DIR}/Common_3/OS/FileSystem/ZipFileSystem.cpp
-	${FORGE_DIR}/Common_3/OS/FileSystem/ZipFileStream.h
-	${FORGE_DIR}/Common_3/OS/FileSystem/ZipFileStream.cpp
+	${FORGE_DIR}/Common_3/OS/FileSystem/FileSystem.cpp
 	${FORGE_DIR}/Common_3/OS/FileSystem/SystemRun.cpp
+	${FORGE_DIR}/Common_3/OS/FileSystem/ZipFileSystem.cpp
 )
 
 #mac port note: AND NOT APPLE
 if(UNIX)
 	set(FORGE_OS_FILESYSTEM ${FORGE_OS_FILESYSTEM}
-		${FORGE_DIR}/Common_3/OS/FileSystem/UnixFileSystem.h
 		${FORGE_DIR}/Common_3/OS/FileSystem/UnixFileSystem.cpp
 	)
 endif()
@@ -71,7 +61,7 @@ file(GLOB FORGE_BASIS_TRANSCODER "${FORGE_DIR}/Common_3/ThirdParty/OpenSource/ba
 file(GLOB FORGE_ZIP "${FORGE_DIR}/Common_3/ThirdParty/OpenSource/zip/*.*")
 
 #Tinyxml2
-file(GLOB FORGE_TINYXML2 "${FORGE_DIR}/Common_3/ThirdParty/OpenSource/TinyXML2/*.*")
+#file(GLOB FORGE_TINYXML2 "${FORGE_DIR}/Common_3/ThirdParty/OpenSource/TinyXML2/*.*")
 
 #spirv tools
 set(FORGE_SPIRVTOOLS 
