@@ -52,8 +52,8 @@ private:
 
 	RHI_RendererHandle mRenderer = NULL;
 	RHI_QueueHandle mGraphicsQueue = NULL;
-	RHI_CmdPoolHandle mCmdPool = NULL;
-	RHI_CmdHandle* mCmds = { NULL };
+	RHI_CmdPoolHandle mCmdPools[gImageCount] = { NULL };
+	RHI_CmdHandle mCmds[gImageCount] = { NULL };
 	RHI_SwapChainHandle mSwapChain = NULL;
 	RHI_RenderTargetHandle mDepthBuffer = NULL;
 	RHI_LoadActionsDesc mLoadActions = {};

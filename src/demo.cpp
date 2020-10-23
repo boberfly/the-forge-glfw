@@ -51,14 +51,15 @@ Demo::~Demo()
 		{
 			RHI_removeFence(mRenderer, mRenderCompleteFences[i]);
 			RHI_removeSemaphore(mRenderer, mRenderCompleteSemaphores[i]);
+
+			RHI_removeCmd(mRenderer, mCmds[i]);
+			RHI_removeCmdPool(mRenderer, mCmdPools[i]);
 		}
 
 		RHI_removeSemaphore(mRenderer, mImageAcquiredSemaphore);
-		RHI_removeCmd_n(mRenderer, gImageCount, mCmds);
-		RHI_removeCmdPool(mRenderer, mCmdPool);
-		RHI_removeQueue(mRenderer, mGraphicsQueue);
 
 		RHI_exitResourceLoaderInterface(mRenderer);
+		RHI_removeQueue(mRenderer, mGraphicsQueue);
 		RHI_removeRenderer(mRenderer);
 	}
 
@@ -146,19 +147,19 @@ bool Demo::init(GLFWwindow *pWindow)
 	queueDesc.mFlag = RHI_QUEUE_FLAG_NONE;//use RHI_QUEUE_FLAG_INIT_MICROPROFILE to enable profiling;
 	RHI_addQueue(mRenderer, &queueDesc, &mGraphicsQueue);
 
-	//create command pool for the graphics queue
-	RHI_CmdPoolDesc cmdPoolDesc = {};
-	cmdPoolDesc.pQueue = mGraphicsQueue;
-	RHI_addCmdPool(mRenderer, &cmdPoolDesc, &mCmdPool);
-
-	//create command buffer for each potential swapchain image
-	RHI_CmdDesc cmdDesc = {};
-	cmdDesc.pPool = mCmdPool;
-	RHI_addCmd_n(mRenderer, &cmdDesc, gImageCount, &mCmds);
-
-	//create sync objects
 	for (uint32_t i = 0; i < gImageCount; ++i)
 	{
+		//create command pool for the graphics queue
+		RHI_CmdPoolDesc cmdPoolDesc = {};
+		cmdPoolDesc.pQueue = mGraphicsQueue;
+		RHI_addCmdPool(mRenderer, &cmdPoolDesc, &mCmdPools[i]);
+
+		//create command buffer for each potential swapchain image
+		RHI_CmdDesc cmdDesc = {};
+		cmdDesc.pPool = mCmdPools[i];
+		RHI_addCmd(mRenderer, &cmdDesc, &mCmds[i]);
+
+		//create sync objects
 		RHI_addFence(mRenderer, &mRenderCompleteFences[i]);
 		RHI_addSemaphore(mRenderer, &mRenderCompleteSemaphores[i]);
 	}
@@ -462,6 +463,7 @@ bool Demo::createSwapchainResources()
 		desc.mClearValue = mLoadActions.mClearDepth;
 		desc.mDepth = 1;
 		desc.mFormat = RHI_IMAGEFORMAT_D32_SFLOAT;
+		desc.mStartState = RHI_RESOURCE_STATE_DEPTH_WRITE;
 		desc.mHeight = mFbHeight;
 		desc.mSampleCount = RHI_SAMPLE_COUNT_1;
 		desc.mSampleQuality = 0;
@@ -522,62 +524,61 @@ void Demo::onRender()
 		RHI_waitForFences(mRenderer, 1, &pRenderCompleteFence);
 
 	//command buffer for this frame
-	RHI_CmdHandle pCmd = mCmds[mFrameIndex];
-	RHI_beginCmd(pCmd);
+	RHI_CmdHandle cmd = mCmds[mFrameIndex];
+	RHI_beginCmd(cmd);
 
 	//transition our render & depth target to a state that we can write to
 	RHI_RenderTargetBarrier barriers[] = 
 	{
-		{ pRenderTarget, RHI_RESOURCE_STATE_RENDER_TARGET },
-		{ mDepthBuffer, RHI_RESOURCE_STATE_DEPTH_WRITE },
+		{ pRenderTarget, RHI_RESOURCE_STATE_PRESENT, RHI_RESOURCE_STATE_RENDER_TARGET },
 	};
-	RHI_cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 2, barriers);
+	RHI_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
 
 	//bind render and depth target and set the viewport and scissor rectangle
 	mLoadActions.mLoadActionsColor[0] = RHI_LOAD_ACTION_CLEAR;
 	mLoadActions.mLoadActionDepth = RHI_LOAD_ACTION_CLEAR;
 	RHI_RenderTargetDesc rtDesc = {};
 	RHI_renderTargetGetDesc(pRenderTarget, rtDesc);
-	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, mDepthBuffer, &mLoadActions, NULL, NULL, -1, -1);
-	RHI_cmdSetViewport(pCmd, 0.0f, 0.0f, (float)rtDesc.mWidth, (float)rtDesc.mHeight, 0.0f, 1.0f);
-	RHI_cmdSetScissor(pCmd, 0, 0, rtDesc.mWidth, rtDesc.mHeight);
+	RHI_cmdBindRenderTargets(cmd, 1, &pRenderTarget, mDepthBuffer, &mLoadActions, NULL, NULL, -1, -1);
+	RHI_cmdSetViewport(cmd, 0.0f, 0.0f, (float)rtDesc.mWidth, (float)rtDesc.mHeight, 0.0f, 1.0f);
+	RHI_cmdSetScissor(cmd, 0, 0, rtDesc.mWidth, rtDesc.mHeight);
 
 	//bind descriptor set
-	RHI_cmdBindDescriptorSet(pCmd, 0, mDescriptorSet);
+	RHI_cmdBindDescriptorSet(cmd, 0, mDescriptorSet);
 	//bind pipeline state object
-	RHI_cmdBindPipeline(pCmd, mGraphicsPipeline);
+	RHI_cmdBindPipeline(cmd, mGraphicsPipeline);
 	//bind index buffer
-	RHI_cmdBindIndexBuffer(pCmd, mIndexBuffer, RHI_INDEX_TYPE_UINT16, 0);
+	RHI_cmdBindIndexBuffer(cmd, mIndexBuffer, RHI_INDEX_TYPE_UINT16, 0);
 	//bind vert buffer
 	const uint32_t stride = sizeof(Vertex);
-	RHI_cmdBindVertexBuffer(pCmd, 1, &mVertexBuffer, &stride, NULL);
+	RHI_cmdBindVertexBuffer(cmd, 1, &mVertexBuffer, &stride, NULL);
 	//bind the push constant
-	RHI_cmdBindPushConstants(pCmd, mRootSignature, "UniformBlockRootConstant", &worldViewProj);
+	RHI_cmdBindPushConstants(cmd, mRootSignature, "UniformBlockRootConstant", &worldViewProj);
 	//draw our cube
-	RHI_cmdDrawIndexed(pCmd, mIndexCount, 0, 0);
+	RHI_cmdDrawIndexed(cmd, mIndexCount, 0, 0);
 
 	//draw UI - we want the swapchain render target bound without the depth buffer
 	mLoadActions.mLoadActionsColor[0] = RHI_LOAD_ACTION_LOAD;
 	mLoadActions.mLoadActionDepth = RHI_LOAD_ACTION_DONTCARE;
-	RHI_cmdBindRenderTargets(pCmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
+	RHI_cmdBindRenderTargets(cmd, 1, &pRenderTarget, NULL, &mLoadActions, NULL, NULL, -1, -1);
 	//mAppUI.Gui(mGuiWindow);
 	//mAppUI.Draw((Cmd*)pCmd);
 
 	//make sure no render target is bound
-	RHI_cmdBindRenderTargets(pCmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
+	RHI_cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
 	//transition render target to a present state
-	barriers[0] = { pRenderTarget, RHI_RESOURCE_STATE_PRESENT };
-	RHI_cmdResourceBarrier(pCmd, 0, NULL, 0, NULL, 1, barriers);
+	barriers[0] = { pRenderTarget, RHI_RESOURCE_STATE_RENDER_TARGET, RHI_RESOURCE_STATE_PRESENT };
+	RHI_cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
 
 	//end the command buffer
-	RHI_endCmd(pCmd);
+	RHI_endCmd(cmd);
 
 	//submit the graphics queue
 	RHI_QueueSubmitDesc submitDesc = {};
 	submitDesc.mCmdCount = 1;
 	submitDesc.mSignalSemaphoreCount = 1;
 	submitDesc.mWaitSemaphoreCount = 1;
-	submitDesc.ppCmds = &pCmd;
+	submitDesc.ppCmds = &cmd;
 	submitDesc.ppSignalSemaphores = &pRenderCompleteSemaphore;
 	submitDesc.ppWaitSemaphores = &mImageAcquiredSemaphore;
 	submitDesc.pSignalFence = pRenderCompleteFence;
